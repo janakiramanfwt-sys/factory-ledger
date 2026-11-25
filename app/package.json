@@ -1,0 +1,46 @@
+{
+  "name": "factory-ledger",
+  "version": "1.3.0",
+  "description": "Offline Sales & Purchase Ledger for your factory",
+  "main": "main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder"
+  },
+  "dependencies": {
+    "electron-updater": "^6.3.9"
+  },
+  "devDependencies": {
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.factoryledger.app",
+    "productName": "Factory Ledger",
+    "asar": true,
+    "compression": "maximum",
+    "electronLanguages": ["en-US"],
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "janakiramanfwt-sys",
+        "repo": "factory-ledger"
+      }
+    ],
+    "files": [
+      "main.js",
+      "preload.js",
+      "index.html"
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "differentialPackage": false,
+      "deleteAppDataOnUninstall": false
+    }
+  }
+}

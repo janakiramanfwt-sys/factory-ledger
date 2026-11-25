@@ -1,0 +1,1411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Factory Ledger</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Serif:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --cover:#163A2E;
+    --cover-dark:#0D2820;
+    --paper:#F3EFE1;
+    --paper-2:#ECE6D2;
+    --rule-red:#C24B4B;
+    --rule-blue:#8FA0C2;
+    --ink:#1C2B3A;
+    --ink-soft:#5B6B7A;
+    --gold:#AD812F;
+    --gold-soft:#DCC98C;
+    --debit:#9C3B3B;
+    --credit:#2F6B4F;
+    --font-display:'IBM Plex Serif',serif;
+    --font-body:'IBM Plex Sans',sans-serif;
+    --font-mono:'IBM Plex Mono',monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:transparent;color:var(--ink);font-family:var(--font-body);}
+  .app{display:flex;flex-direction:column;min-height:100%;background:var(--paper);border:1px solid #d8d0b8;border-radius:6px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.08);}
+
+  /* ===== Header / cover strip ===== */
+  .cover{background:linear-gradient(135deg,var(--cover),var(--cover-dark));color:var(--paper);padding:18px 22px;display:flex;align-items:center;justify-content:space-between;gap:16px;}
+  .cover-title{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;}
+  .cover-title input{background:transparent;border:none;border-bottom:1px dashed rgba(243,239,225,.4);color:var(--paper);font-family:var(--font-display);font-weight:700;font-size:20px;padding:2px 0;min-width:120px;}
+  .cover-title input:focus{outline:none;border-bottom-color:var(--gold-soft);}
+  .cover-sub{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--gold-soft);font-family:var(--font-mono);}
+  .cover-actions{display:flex;gap:8px;align-items:center;}
+  .icon-btn{background:rgba(243,239,225,.08);border:1px solid rgba(243,239,225,.25);color:var(--paper);border-radius:5px;padding:6px 10px;font-size:12px;cursor:pointer;font-family:var(--font-body);}
+  .icon-btn:hover{background:rgba(243,239,225,.18);}
+
+  /* ===== Tabs styled as ledger index tabs ===== */
+  .tabs{display:flex;gap:6px;padding:10px 16px 0;background:var(--paper-2);border-bottom:2px solid var(--cover);}
+  .tab{
+    font-family:var(--font-body);font-weight:600;font-size:13px;color:var(--ink-soft);
+    background:#E4DDC3;border:1px solid #cfc6a4;border-bottom:none;
+    padding:9px 16px 8px;cursor:pointer;
+    clip-path:polygon(8% 0,92% 0,100% 100%,0% 100%);
+    margin-bottom:-2px;transition:all .12s ease;
+  }
+  .tab:hover{background:#EFE9D4;color:var(--ink);}
+  .tab.active{background:var(--paper);color:var(--cover);border-color:var(--cover);position:relative;z-index:2;}
+
+  /* ===== Page / content area ===== */
+  .page{padding:20px 22px 28px;flex:1;}
+  h2.section-title{font-family:var(--font-display);font-size:17px;margin:0 0 14px;color:var(--cover);display:flex;align-items:center;gap:8px;}
+  h2.section-title::before{content:"";width:5px;height:16px;background:var(--gold);display:inline-block;border-radius:1px;}
+
+  /* ===== Dashboard cards ===== */
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:20px;}
+  .card{background:var(--paper);border:1px solid #d8d0b8;border-left:4px solid var(--gold);border-radius:4px;padding:12px 14px;}
+  .card .lbl{font-size:10.5px;text-transform:uppercase;letter-spacing:.09em;color:var(--ink-soft);font-family:var(--font-mono);}
+  .card .val{font-family:var(--font-mono);font-size:22px;font-weight:600;margin-top:4px;color:var(--ink);}
+  .card.receivable{border-left-color:var(--debit);}
+  .card.payable{border-left-color:var(--credit);}
+
+  .recent-list{border:1px solid #d8d0b8;border-radius:4px;overflow:hidden;}
+  .recent-row{display:flex;justify-content:space-between;padding:9px 12px;font-size:13px;border-bottom:1px solid #e3ddc6;background:var(--paper);}
+  .recent-row:last-child{border-bottom:none;}
+  .recent-row .rtype{font-family:var(--font-mono);font-size:10px;padding:2px 6px;border-radius:3px;text-transform:uppercase;letter-spacing:.05em;}
+  .rtype.sale{background:#f3dede;color:var(--debit);}
+  .rtype.purchase{background:#ded9f3;color:#4b3b9c;}
+  .rtype.receipt{background:#dcefe4;color:var(--credit);}
+  .rtype.payment{background:#f3ecd9;color:var(--gold);}
+  .empty-note{color:var(--ink-soft);font-size:13px;padding:14px;text-align:center;border:1px dashed #cfc6a4;border-radius:4px;}
+
+  /* ===== Forms ===== */
+  .form-row{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px;}
+  .field{display:flex;flex-direction:column;gap:4px;flex:1;min-width:140px;}
+  .field label{font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--ink-soft);font-family:var(--font-mono);}
+  input[type=text],input[type=date],input[type=number],select,textarea{
+    font-family:var(--font-body);font-size:13.5px;padding:8px 9px;border:1px solid #c8bf9e;border-radius:4px;background:#fdfcf6;color:var(--ink);
+  }
+  input:focus,select:focus,textarea:focus{outline:none;border-color:var(--cover);box-shadow:0 0 0 2px rgba(22,58,46,.12);}
+  .btn{font-family:var(--font-body);font-weight:600;font-size:13px;padding:9px 16px;border-radius:4px;border:1px solid var(--cover);background:var(--cover);color:var(--paper);cursor:pointer;}
+  .btn:hover{background:var(--cover-dark);}
+  .btn.secondary{background:transparent;color:var(--cover);}
+  .btn.secondary:hover{background:rgba(22,58,46,.08);}
+  .btn.danger{background:transparent;border-color:var(--debit);color:var(--debit);}
+  .btn.danger:hover{background:rgba(156,59,59,.08);}
+  .btn.small{padding:5px 10px;font-size:11.5px;}
+
+  .type-picker{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;}
+  .type-opt{padding:8px 14px;border:1px solid #c8bf9e;border-radius:5px;font-size:13px;font-weight:600;cursor:pointer;background:#fdfcf6;color:var(--ink-soft);}
+  .type-opt.active.sale{background:#f3dede;border-color:var(--debit);color:var(--debit);}
+  .type-opt.active.purchase{background:#ded9f3;border-color:#4b3b9c;color:#4b3b9c;}
+  .type-opt.active.receipt{background:#dcefe4;border-color:var(--credit);color:var(--credit);}
+  .type-opt.active.payment{background:#f3ecd9;border-color:var(--gold);color:var(--gold);}
+
+  .items-table{width:100%;border-collapse:collapse;margin-bottom:10px;}
+  .items-table th{font-family:var(--font-mono);font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-soft);text-align:left;padding:6px 6px;border-bottom:2px solid var(--cover);}
+  .items-table td{padding:5px 6px;border-bottom:1px solid #e3ddc6;}
+  .items-table input{width:100%;padding:6px 7px;font-size:13px;}
+  .items-table .amt-cell{font-family:var(--font-mono);text-align:right;padding-right:10px;white-space:nowrap;}
+  .items-table .rm-cell{text-align:center;}
+  .product-combo{position:relative;}
+  .product-combo input.item-product{padding-right:26px;}
+  .product-drop-btn{position:absolute;right:2px;top:2px;bottom:2px;width:24px;border:none;background:transparent;color:var(--ink-soft);cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center;border-radius:3px;}
+  .product-drop-btn:hover{background:rgba(22,58,46,.08);color:var(--cover);}
+  .product-dropdown{display:none;position:absolute;top:100%;left:0;right:0;z-index:30;background:#fdfcf6;border:1px solid var(--cover);border-top:none;border-radius:0 0 4px 4px;box-shadow:0 6px 14px rgba(0,0,0,.14);max-height:190px;overflow-y:auto;}
+  .product-dropdown.open{display:block;}
+  .product-opt{padding:7px 9px;font-size:13px;cursor:pointer;border-bottom:1px solid #ece6cf;color:var(--ink);}
+  .product-opt:last-child{border-bottom:none;}
+  .product-opt:hover,.product-opt.active{background:var(--gold-soft);color:var(--cover-dark);font-weight:600;}
+
+  .totals-box{margin-left:auto;width:280px;font-family:var(--font-mono);font-size:13px;border:1px solid #d8d0b8;border-radius:4px;overflow:hidden;}
+  .totals-box .trow{display:flex;justify-content:space-between;padding:7px 12px;border-bottom:1px solid #e3ddc6;background:var(--paper);}
+  .totals-box .trow.total{background:var(--cover);color:var(--paper);font-weight:700;border-bottom:none;}
+
+  /* ===== Ledger table (the signature ruled page) ===== */
+  .ledger-wrap{border:1px solid #c8bf9e;border-radius:4px;overflow:hidden;background:#fffdf6;position:relative;}
+  .ledger-wrap::before{content:"";position:absolute;top:0;bottom:0;left:38px;width:1px;background:var(--rule-red);opacity:.55;pointer-events:none;}
+  table.ledger{width:100%;border-collapse:collapse;font-size:12.5px;}
+  table.ledger thead th{background:var(--cover);color:var(--paper);font-family:var(--font-mono);font-weight:600;font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;padding:8px 8px;text-align:left;position:sticky;top:0;}
+  table.ledger td{padding:6px 8px;border-bottom:1px solid var(--rule-blue);vertical-align:top;}
+  table.ledger tr.entry-head td{border-top:1px solid #b9a97a;padding-top:8px;}
+  table.ledger td.num{font-family:var(--font-mono);text-align:right;white-space:nowrap;}
+  table.ledger td.debit-col{color:var(--debit);}
+  table.ledger td.credit-col{color:var(--credit);}
+  table.ledger td.bal-col{font-weight:700;}
+  table.ledger .item-line{color:var(--ink-soft);font-size:12px;}
+  table.ledger .particulars-title{font-weight:700;color:var(--ink);}
+  table.ledger tr.total-row td{border-top:2px solid var(--cover);font-weight:700;background:var(--paper-2);}
+  table.ledger tr.total-row.closing td{border-top:none;background:var(--gold-soft);color:var(--cover-dark);}
+  .del-x{cursor:pointer;color:var(--debit);font-family:var(--font-mono);font-size:11px;border:1px solid var(--debit);border-radius:3px;padding:1px 5px;background:transparent;}
+
+  .party-select-row{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:16px;}
+
+  .party-list{display:flex;flex-direction:column;gap:8px;}
+  .party-card{display:flex;justify-content:space-between;align-items:center;padding:11px 14px;border:1px solid #d8d0b8;border-radius:5px;background:var(--paper);cursor:pointer;}
+  .party-card:hover{border-color:var(--gold);}
+  .party-card .pname{font-weight:600;font-size:14px;}
+  .party-card .ptype{font-family:var(--font-mono);font-size:10px;text-transform:uppercase;color:var(--ink-soft);letter-spacing:.05em;margin-left:8px;}
+  .party-card .pbal{font-family:var(--font-mono);font-weight:700;}
+  .party-card .pbal.pos{color:var(--debit);}
+  .party-card .pbal.neg{color:var(--credit);}
+  .party-card .pactions{display:flex;gap:6px;}
+
+  .settings-panel{position:fixed;top:0;right:0;bottom:0;width:320px;background:var(--paper);border-left:2px solid var(--cover);box-shadow:-6px 0 20px rgba(0,0,0,.15);padding:20px;overflow-y:auto;z-index:50;}
+  .settings-panel h3{font-family:var(--font-display);color:var(--cover);margin-top:0;}
+  .settings-close{position:absolute;top:14px;right:16px;cursor:pointer;font-size:18px;color:var(--ink-soft);background:none;border:none;}
+  .overlay{position:fixed;inset:0;background:rgba(13,40,32,.35);z-index:40;}
+
+  .add-row-link{font-size:12.5px;color:var(--cover);font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:4px;margin-bottom:14px;}
+  .add-row-link:hover{text-decoration:underline;}
+
+  ::placeholder{color:#a79f83;}
+  .foot-note{font-size:11px;color:var(--ink-soft);margin-top:14px;text-align:center;font-family:var(--font-mono);}
+
+  @media print{
+    body *{ visibility:hidden; }
+    .print-preview-paper, .print-preview-paper *{ visibility:visible; }
+    .print-preview-paper{ position:absolute; top:0; left:0; width:100%; box-shadow:none; border:none; padding:0; }
+    /* Neutralise the overlay wrapper so it doesn't add a coloured background or
+       fixed positioning that shifts/clips the printable paper */
+    .print-overlay{ position:static !important; background:none !important; padding:0 !important; z-index:auto !important; overflow:visible !important; }
+    /* Hide only the toolbar, not the whole overlay */
+    .print-preview-toolbar{ display:none !important; }
+    .no-print{ display:none !important; }
+  }
+  .print-overlay{position:fixed;inset:0;background:rgba(13,40,32,.55);z-index:60;overflow:auto;padding:30px 16px;}
+  .print-preview-paper{max-width:820px;margin:0 auto;background:#fffdf6;border:1px solid #c8bf9e;border-radius:4px;box-shadow:0 8px 30px rgba(0,0,0,.25);padding:28px 30px;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  .print-preview-toolbar{max-width:820px;margin:0 auto 14px;display:flex;justify-content:flex-end;gap:8px;}
+  .print-header{margin-bottom:18px;padding-bottom:14px;border-bottom:2px solid var(--cover);}
+  .print-header .pcompany{font-family:var(--font-display);font-size:22px;font-weight:700;color:var(--cover);}
+  .print-header .pmeta{font-size:12px;color:var(--ink-soft);margin-top:3px;}
+  .print-header .ptitle{margin-top:12px;font-family:var(--font-mono);font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--gold);}
+  .print-header .pparty{font-family:var(--font-display);font-size:16px;color:var(--ink);margin-top:2px;}
+  .print-preview-toolbar label{display:flex;align-items:center;gap:6px;color:#fff;font-size:13px;font-family:var(--font-body);margin-right:auto;background:rgba(0,0,0,.25);padding:6px 12px;border-radius:5px;}
+
+  /* Black & white friendly print mode: no reliance on color or background fill */
+  .print-preview-paper.bw-mode{ background:#fff; }
+  .print-preview-paper.bw-mode .ledger-wrap::before{ display:none; }
+  .print-preview-paper.bw-mode .print-header{ border-bottom:2px solid #000; }
+  .print-preview-paper.bw-mode .pcompany,
+  .print-preview-paper.bw-mode .pparty{ color:#000; }
+  .print-preview-paper.bw-mode .ptitle{ color:#000; font-weight:700; }
+  .print-preview-paper.bw-mode table.ledger thead th{ background:#fff; color:#000; border-bottom:2px solid #000; }
+  .print-preview-paper.bw-mode table.ledger td{ border-bottom:1px solid #999; }
+  .print-preview-paper.bw-mode td.debit-col,
+  .print-preview-paper.bw-mode td.credit-col,
+  .print-preview-paper.bw-mode td.bal-col{ color:#000; }
+  .print-preview-paper.bw-mode tr.entry-head td{ border-top:1px solid #000; }
+  .print-preview-paper.bw-mode tr.total-row td{ background:#fff; border-top:2px solid #000; color:#000; }
+  .print-preview-paper.bw-mode tr.total-row.closing td{ background:#fff; color:#000; border-top:1px solid #000; border-bottom:2px double #000; }
+  .print-preview-paper.bw-mode .particulars-title{ color:#000; }
+  .print-preview-paper.bw-mode .item-line{ color:#333; }
+  @media (max-width:640px){
+    .cover{flex-direction:column;align-items:flex-start;}
+    .totals-box{width:100%;}
+    table.ledger{font-size:11px;}
+  }
+
+  /* ===== WhatsApp share button ===== */
+  .wa-btn{background:#25D366;border-color:#1ebe5d;color:#fff;display:flex;align-items:center;gap:6px;}
+  .wa-btn:hover{background:#1ebe5d;}
+  .wa-btn:disabled{opacity:.55;cursor:not-allowed;}
+
+  /* ===== Toast notification ===== */
+  #shareToast{
+    position:fixed;bottom:28px;left:50%;transform:translateX(-50%) translateY(20px);
+    background:rgba(22,58,46,.95);color:var(--paper);font-family:var(--font-body);
+    font-size:13px;padding:10px 20px;border-radius:8px;z-index:999;
+    opacity:0;transition:opacity .25s,transform .25s;pointer-events:none;white-space:nowrap;
+    box-shadow:0 4px 18px rgba(0,0,0,.3);
+  }
+  #shareToast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+  /* ===== WhatsApp fallback modal ===== */
+  #waModal{
+    position:fixed;inset:0;z-index:9999;background:rgba(13,40,32,.65);
+    display:none;align-items:center;justify-content:center;padding:20px;
+  }
+  #waModal.open{ display:flex; }
+  #waModalBox{
+    background:var(--paper);border-radius:10px;padding:28px 26px;max-width:380px;width:100%;
+    box-shadow:0 12px 40px rgba(0,0,0,.35);font-family:var(--font-body);
+    animation:waSlideIn .22s ease;
+  }
+  @keyframes waSlideIn{ from{transform:translateY(18px);opacity:0} to{transform:none;opacity:1} }
+  #waModalBox h3{ margin:0 0 6px;font-family:var(--font-display);color:var(--cover);font-size:17px; }
+  #waModalBox p{ margin:0 0 18px;font-size:13.5px;color:var(--ink-soft);line-height:1.55; }
+  #waModalBox .wa-filename{
+    font-family:var(--font-mono);font-size:12px;background:var(--paper-2);
+    border:1px solid #d8d0b8;border-radius:4px;padding:7px 10px;
+    margin-bottom:18px;word-break:break-all;color:var(--ink);
+  }
+  #waModalBox .wa-actions{ display:flex;gap:10px;flex-wrap:wrap; }
+  #waOpenWA{ background:#25D366;border:none;color:#fff;font-family:var(--font-body);font-weight:600;font-size:13px;padding:10px 18px;border-radius:6px;cursor:pointer;flex:1; }
+  #waOpenWA:hover{ background:#1ebe5d; }
+  #waModalClose{ background:transparent;border:1px solid #c8bf9e;color:var(--ink-soft);font-family:var(--font-body);font-size:13px;padding:10px 14px;border-radius:6px;cursor:pointer; }
+  #waModalClose:hover{ background:var(--paper-2); }
+</style>
+</head>
+<body>
+<!-- PDF generation libs (loaded from CDN; work offline after first cache) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<div id="shareToast"></div>
+<!-- WhatsApp fallback modal -->
+<div id="waModal">
+  <div id="waModalBox">
+    <h3>📤 PDF Ready to Share</h3>
+    <p id="waModalDesc">The PDF has been saved to your <strong>Downloads</strong> folder. Open WhatsApp and attach it to any chat.</p>
+    <div class="wa-filename" id="waModalFilename"></div>
+    <div class="wa-actions">
+      <button id="waOpenDesktop" style="display:none">Open WhatsApp →</button>
+      <button id="waOpenWA">Open WhatsApp Web →</button>
+      <button id="waDownloadPdf">⬇️ Download PDF</button>
+      <button id="waModalClose">Close</button>
+    </div>
+    <div id="waModalNote" style="margin-top:12px;font-size:12px;color:var(--ink-soft);display:none;"></div>
+  </div>
+</div>
+<div class="app" id="app">Loading ledger…</div>
+
+<script>
+const STORAGE_KEY = 'factory-ledger-data';
+
+// Bump this with each release you hand out, and add an entry to CHANGELOG.
+// There's no internet auto-update (this app is fully offline) — this just
+// shows a "what's new" note the first time someone opens a newer copy.
+const APP_VERSION = '1.3.0';
+const CHANGELOG = [
+  { version:'1.3.0', notes:[
+    'Product field now suggests names you have used before, as you type',
+    'Added Agents — assign a sales/purchase agent to any entry, manage them from the Parties tab',
+    'Ledger Report now has a "Sales Summary (No Price)" view — party, agent, product and quantity/cases only, with its own print & share'
+  ]},
+  { version:'1.2.0', notes:[
+    'Commission Charges can now be entered as a flat ₹ amount or as a % of the taxable value'
+  ]},
+  { version:'1.1.0', notes:[
+    'Fixed a bug where the Product field could stop responding after saving an entry',
+    'Added a company letterhead + on-screen preview before printing',
+    'Added a Black & White friendly print mode',
+    'Reduced the installer size'
+  ]},
+  { version:'1.0.0', notes:[
+    'Initial release — parties, sales, purchases, receipts, payments, ledger report'
+  ]}
+];
+
+let state = {
+  settings:{ companyName:'My Factory', address:'', gstin:'', cgstRate:2.5, sgstRate:2.5, igstRate:5, counters:{sale:1,purchase:1,receipt:1,payment:1} },
+  parties:[],
+  agents:[],
+  entries:[],
+  lastSeenVersion: null
+};
+let loaded = false;
+let currentTab = 'dashboard';
+let settingsOpen = false;
+let printPreviewOpen = false;
+let printBw = false;
+let whatsNewOpen = false;
+let updateState = { status: '', version: '' };
+function updateStatusText(){
+  if(updateState.status==='checking') return 'Checking for updates…';
+  if(updateState.status==='available') return `Downloading v${updateState.version||''}…`;
+  if(updateState.status==='downloaded') return `v${updateState.version||''} ready — restart to apply.`;
+  if(updateState.status==='latest') return 'You are on the latest version.';
+  if(updateState.status==='offline') return 'Offline or no update found.';
+  if(updateState.status==='dev') return 'Updates are active in the installed .exe.';
+  return '';
+}
+
+// ---- new entry draft state ----
+let draft = { type:'sale', partyId:'', agentId:'', date: todayStr(), items:[ blankItem() ], gstType:'intra', cgstRate:2.5, sgstRate:2.5, igstRate:5, packaging:'', commission:'', commissionType:'amount', amount:'', mode:'Cash', note:'', newPartyName:'', newPartyType:'customer', newOpeningBalance:'', newOpeningSide:'dr', newAgentName:'' };
+let ledgerSel = { partyId:'', from:'', to:'', view:'ledger' };
+let editingPartyId = null;
+
+function todayStr(){ const d=new Date(); return d.toISOString().slice(0,10); }
+function blankItem(){ return { product:'', qty:'', unit:'Nos', rate:'' }; }
+function agentName(id){ const a = state.agents.find(a=>a.id===id); return a ? a.name : ''; }
+function uid(){ return 'id'+Math.random().toString(36).slice(2,10)+Date.now().toString(36); }
+function fmt(n){ n = Number(n)||0; return n.toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function fmtDate(iso){ if(!iso) return ''; const [y,m,d]=iso.split('-'); return `${d}-${m}-${y}`; }
+
+// Works two ways, fully offline either way:
+// 1) Inside the Factory Ledger desktop app -> saves to a file on this PC via window.ledgerAPI
+// 2) Opened directly as this HTML file in a browser -> saves inside the browser's local storage
+async function loadData(){
+  try{
+    let raw = null;
+    if(window.ledgerAPI){ raw = await window.ledgerAPI.getData(); }
+    else { raw = localStorage.getItem(STORAGE_KEY); }
+    if(raw){
+      const parsed = JSON.parse(raw);
+      const defaultSettings = state.settings;
+      const defaultCounters = defaultSettings.counters;
+      state = Object.assign(state, parsed);
+      state.settings = Object.assign({}, defaultSettings, parsed.settings || {});
+      state.settings.counters = Object.assign({}, defaultCounters, (parsed.settings && parsed.settings.counters) || {});
+      if(!Array.isArray(state.parties)) state.parties = [];
+      if(!Array.isArray(state.agents)) state.agents = [];
+      if(!Array.isArray(state.entries)) state.entries = [];
+    }
+  }catch(e){ console.error('Load failed', e); }
+  loaded = true;
+  if(state.lastSeenVersion !== APP_VERSION){ whatsNewOpen = true; }
+  render();
+}
+async function saveData(){
+  if(!loaded) return;
+  try{
+    const json = JSON.stringify(state);
+    if(window.ledgerAPI){ await window.ledgerAPI.saveData(json); }
+    else { localStorage.setItem(STORAGE_KEY, json); }
+  }catch(e){ console.error('Save failed', e); }
+}
+
+// ================= COMPUTATIONS =================
+function entryTotals(items, cgstRate, sgstRate, gstType, igstRate, packaging, commissionValue, commissionType){
+  const itemsSubtotal = items.reduce((s,it)=> s + (Number(it.qty)||0)*(Number(it.rate)||0), 0);
+  const pack = Number(packaging)||0;
+  const commVal = Number(commissionValue)||0;
+  const taxable = itemsSubtotal + pack;
+  let cgstAmt=0, sgstAmt=0, igstAmt=0;
+  if(gstType==='inter'){
+    igstAmt = taxable * (Number(igstRate)||0)/100;
+  } else {
+    cgstAmt = taxable * (Number(cgstRate)||0)/100;
+    sgstAmt = taxable * (Number(sgstRate)||0)/100;
+  }
+  const comm = commissionType==='percent' ? (taxable * commVal/100) : commVal;
+  const raw = taxable + cgstAmt + sgstAmt + igstAmt - comm;
+  const total = Math.round(raw);
+  const roundoff = total - raw;
+  return { subtotal: itemsSubtotal, packaging: pack, commission: comm, commissionValue: commVal, commissionType: commissionType||'amount', taxable, cgstAmt, sgstAmt, igstAmt, raw, total, roundoff };
+}
+function entryDebit(e){ return (e.type==='sale'||e.type==='payment') ? e.total : 0; }
+function entryCredit(e){ return (e.type==='purchase'||e.type==='receipt') ? e.total : 0; }
+function partyBalance(partyId){
+  const party = state.parties.find(p=>p.id===partyId);
+  let bal = party ? (party.openingBalance||0) : 0;
+  const list = state.entries.filter(e=>e.partyId===partyId).sort(sortEntries);
+  list.forEach(e=>{ bal += entryDebit(e) - entryCredit(e); });
+  return bal;
+}
+function sortEntries(a,b){ if(a.date!==b.date) return a.date<b.date?-1:1; return a.voucherNo - b.voucherNo; }
+function totalReceivable(){ return state.parties.filter(p=>p.type==='customer').reduce((s,p)=> s + Math.max(0,partyBalance(p.id)), 0); }
+function totalPayable(){ return state.parties.filter(p=>p.type==='supplier').reduce((s,p)=> s + Math.max(0,partyBalance(p.id)), 0); }
+
+// ================= RENDER =================
+function render(){
+  if(!loaded){ document.getElementById('app').textContent='Loading ledger…'; return; }
+  const el = document.getElementById('app');
+  el.innerHTML = `
+    ${renderCover()}
+    ${renderTabs()}
+    <div class="page">${renderTabContent()}</div>
+    <div class="foot-note">Runs fully offline. All data stays on this computer.</div>
+    ${settingsOpen ? renderSettings() : ''}
+    ${printPreviewOpen ? renderPrintPreview() : ''}
+    ${whatsNewOpen ? renderWhatsNew() : ''}
+  `;
+  // handlers are bound once via initEventDelegation() — no rebinding needed here
+}
+
+function renderWhatsNew(){
+  const rows = CHANGELOG.map(c=>`
+    <div style="margin-bottom:14px;">
+      <div style="font-family:var(--font-mono);font-size:11px;letter-spacing:.06em;color:var(--gold);text-transform:uppercase;margin-bottom:4px;">Version ${escapeHtml(c.version)}</div>
+      <ul style="margin:0;padding-left:18px;font-size:13.5px;color:var(--ink);line-height:1.6;">
+        ${c.notes.map(n=>`<li>${escapeHtml(n)}</li>`).join('')}
+      </ul>
+    </div>`).join('');
+  return `
+  <div class="overlay no-print" id="whatsNewOverlay"></div>
+  <div class="settings-panel no-print" style="max-width:380px;">
+    <button class="settings-close" id="whatsNewCloseX">✕</button>
+    <h3>🆕 What's New — v${escapeHtml(APP_VERSION)}</h3>
+    ${rows}
+    <button class="btn" id="whatsNewCloseBtn" style="width:100%;margin-top:6px;">Got it, thanks!</button>
+  </div>`;
+}
+
+function renderPrintPreview(){
+  const sel = ledgerSel.partyId;
+  const party = state.parties.find(p=>p.id===sel);
+  if(!party){ return ''; }
+  const view = ledgerSel.view || 'ledger';
+  const tableHtml = view==='dispatch' ? buildDispatchTableHtml(sel) : buildLedgerTableHtml(sel, false);
+  const s = state.settings;
+  const rangeText = (ledgerSel.from || ledgerSel.to)
+    ? `${ledgerSel.from ? fmtDate(ledgerSel.from) : 'Start'} to ${ledgerSel.to ? fmtDate(ledgerSel.to) : 'Today'}`
+    : 'All dates';
+  const titleText = view==='dispatch' ? 'Sales Summary (No Price)' : 'Ledger Itemized Report';
+  return `
+  <div class="print-overlay">
+    <div class="print-preview-toolbar">
+      <label><input type="checkbox" id="bwToggle" ${printBw?'checked':''}> Black &amp; White friendly</label>
+      <button class="icon-btn" style="background:var(--cover);border-color:var(--cover);" id="doPrintBtn">🖨 Print</button>
+      <button class="icon-btn wa-btn" id="waShareBtn">📤 Share</button>
+      <button class="icon-btn" style="background:#6b6b6b;border-color:#6b6b6b;" id="closePreviewBtn">✕ Close</button>
+    </div>
+    <div class="print-preview-paper ${printBw?'bw-mode':''}" id="printPaper">
+      <div class="print-header">
+        <div class="pcompany">${escapeHtml(s.companyName || 'My Factory')}</div>
+        ${s.address ? `<div class="pmeta">${escapeHtml(s.address)}</div>` : ''}
+        ${s.gstin && view!=='dispatch' ? `<div class="pmeta">GSTIN: ${escapeHtml(s.gstin)}</div>` : ''}
+        <div class="ptitle">${titleText} · ${escapeHtml(rangeText)}</div>
+        <div class="pparty">${escapeHtml(party.name)}</div>
+      </div>
+      ${tableHtml}
+    </div>
+  </div>`;
+}
+function renderCover(){
+  return `
+  <div class="cover">
+    <div>
+      <div class="cover-title">
+        <span style="font-family:var(--font-display);font-size:20px;">📒</span>
+        <input id="companyNameInput" type="text" value="${escapeAttr(state.settings.companyName)}" placeholder="Your Factory Name">
+      </div>
+      <div class="cover-sub">Sales &amp; Purchase Ledger</div>
+    </div>
+    <div class="cover-actions no-print">
+      <button class="icon-btn" id="printBtn">🖨 Print</button>
+      <button class="icon-btn" id="whatsNewBtn">🆕 v${escapeHtml(APP_VERSION)}</button>
+      <button class="icon-btn" id="settingsBtn">⚙ Settings</button>
+    </div>
+  </div>`;
+}
+
+function renderTabs(){
+  const tabs = [['dashboard','Dashboard'],['parties','Parties'],['newentry','New Entry'],['ledger','Ledger Report']];
+  return `<div class="tabs no-print">${tabs.map(([id,label])=>`<div class="tab ${currentTab===id?'active':''}" data-tab="${id}">${label}</div>`).join('')}</div>`;
+}
+
+function renderTabContent(){
+  if(currentTab==='dashboard') return renderDashboard();
+  if(currentTab==='parties') return renderParties();
+  if(currentTab==='newentry') return renderNewEntry();
+  if(currentTab==='ledger') return renderLedger();
+  return '';
+}
+
+function renderDashboard(){
+  const recv = totalReceivable(), pay = totalPayable();
+  const recent = [...state.entries].sort((a,b)=> b.date<a.date?-1: b.date>a.date?1: b.voucherNo-a.voucherNo).slice(0,8);
+  return `
+    <h2 class="section-title">Dashboard</h2>
+    <div class="cards">
+      <div class="card receivable"><div class="lbl">Total Receivable</div><div class="val">₹${fmt(recv)}</div></div>
+      <div class="card payable"><div class="lbl">Total Payable</div><div class="val">₹${fmt(pay)}</div></div>
+      <div class="card"><div class="lbl">Parties</div><div class="val">${state.parties.length}</div></div>
+      <div class="card"><div class="lbl">Entries Recorded</div><div class="val">${state.entries.length}</div></div>
+    </div>
+    <h2 class="section-title">Recent Activity</h2>
+    ${recent.length===0 ? `<div class="empty-note">No entries yet — add your first sale or purchase from the New Entry tab.</div>` :
+      `<div class="recent-list">${recent.map(e=>{
+        const p = state.parties.find(p=>p.id===e.partyId);
+        return `<div class="recent-row">
+          <span><span class="rtype ${e.type}">${e.type}</span> &nbsp;${p?p.name:'—'} <span style="color:var(--ink-soft)">· ${fmtDate(e.date)}</span></span>
+          <span style="font-family:var(--font-mono);font-weight:600;">₹${fmt(e.total)}</span>
+        </div>`;
+      }).join('')}</div>`}
+  `;
+}
+
+function renderParties(){
+  const editing = editingPartyId ? state.parties.find(p=>p.id===editingPartyId) : null;
+  return `
+    <h2 class="section-title">${editing? 'Edit Party' : 'Parties'}</h2>
+    <div class="form-row">
+      <div class="field" style="flex:2;min-width:180px;">
+        <label>Party Name</label>
+        <input type="text" id="newPartyName" placeholder="e.g. Sharma Traders" value="${escapeAttr(draft.newPartyName)}">
+      </div>
+      <div class="field">
+        <label>Type</label>
+        <select id="newPartyType">
+          <option value="customer" ${draft.newPartyType==='customer'?'selected':''}>Customer (Sales)</option>
+          <option value="supplier" ${draft.newPartyType==='supplier'?'selected':''}>Supplier (Purchase)</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Opening Balance (₹)</label>
+        <input type="number" id="newOpeningBalance" min="0" step="any" value="${draft.newOpeningBalance}">
+      </div>
+      <div class="field">
+        <label>Balance Type</label>
+        <select id="newOpeningSide">
+          <option value="dr" ${draft.newOpeningSide==='dr'?'selected':''}>Dr (they owe you)</option>
+          <option value="cr" ${draft.newOpeningSide==='cr'?'selected':''}>Cr (you owe them)</option>
+        </select>
+      </div>
+      <div class="field" style="justify-content:flex-end;">
+        <button class="btn" id="addPartyBtn">${editing? '✓ Update Party' : '+ Add Party'}</button>
+        ${editing? `<button class="btn secondary" id="cancelEditPartyBtn" style="margin-top:6px;">Cancel</button>` : ''}
+      </div>
+    </div>
+    <div class="party-list">
+      ${state.parties.length===0 ? `<div class="empty-note">No parties yet. Add a customer or supplier above.</div>` :
+        state.parties.map(p=>{
+          const bal = partyBalance(p.id);
+          return `<div class="party-card" data-open-ledger="${p.id}">
+            <div><span class="pname">${escapeHtml(p.name)}</span><span class="ptype">${p.type}</span></div>
+            <div class="pactions">
+              <span class="pbal ${bal>=0?'pos':'neg'}">₹${fmt(Math.abs(bal))} ${bal>=0?'Dr':'Cr'}</span>
+              <button class="btn secondary small no-print" data-edit-party="${p.id}">Edit</button>
+              <button class="btn danger small no-print" data-del-party="${p.id}">Delete</button>
+            </div>
+          </div>`;
+        }).join('')}
+    </div>
+
+    <h2 class="section-title" style="margin-top:26px;">Agents</h2>
+    <div class="form-row">
+      <div class="field" style="flex:2;min-width:180px;">
+        <label>Agent Name</label>
+        <input type="text" id="newAgentName" placeholder="e.g. Ramesh" value="${escapeAttr(draft.newAgentName)}">
+      </div>
+      <div class="field" style="justify-content:flex-end;">
+        <button class="btn" id="addAgentBtn">+ Add Agent</button>
+      </div>
+    </div>
+    <div class="party-list">
+      ${state.agents.length===0 ? `<div class="empty-note">No agents yet. Add one above if you work with sales/purchase agents.</div>` :
+        state.agents.map(a=>`<div class="party-card">
+            <div><span class="pname">${escapeHtml(a.name)}</span></div>
+            <div class="pactions">
+              <button class="btn danger small no-print" data-del-agent="${a.id}">Delete</button>
+            </div>
+          </div>`).join('')}
+    </div>
+  `;
+}
+
+function allKnownProducts(){
+  const set = new Set();
+  state.entries.forEach(e=> (e.items||[]).forEach(it=>{
+    const p = (it.product||'').trim();
+    if(p) set.add(p);
+  }));
+  return Array.from(set).sort((a,b)=>a.localeCompare(b, undefined, {sensitivity:'base'}));
+}
+
+function renderNewEntry(){
+  const isItemsType = draft.type==='sale' || draft.type==='purchase';
+  const parties = state.parties.filter(p => draft.type==='sale' ? p.type==='customer' : draft.type==='purchase' ? p.type==='supplier' : true);
+  const totals = isItemsType ? entryTotals(draft.items, draft.cgstRate, draft.sgstRate, draft.gstType, draft.igstRate, draft.packaging, draft.commission, draft.commissionType) : null;
+
+  return `
+    <h2 class="section-title">New Entry</h2>
+    <div class="type-picker">
+      ${['sale','purchase','receipt','payment'].map(t=>`<div class="type-opt ${draft.type===t?'active '+t:''}" data-set-type="${t}">${label(t)}</div>`).join('')}
+    </div>
+
+    <div class="form-row">
+      <div class="field">
+        <label>Party</label>
+        <select id="partySelect">
+          <option value="">— Select party —</option>
+          ${parties.map(p=>`<option value="${p.id}" ${draft.partyId===p.id?'selected':''}>${escapeHtml(p.name)}</option>`).join('')}
+        </select>
+      </div>
+      <div class="field">
+        <label>Agent (optional)</label>
+        <select id="agentSelect">
+          <option value="">— No agent —</option>
+          ${state.agents.map(a=>`<option value="${a.id}" ${draft.agentId===a.id?'selected':''}>${escapeHtml(a.name)}</option>`).join('')}
+        </select>
+      </div>
+      <div class="field">
+        <label>Date</label>
+        <input type="date" id="entryDate" value="${draft.date}">
+      </div>
+      ${!isItemsType ? `<div class="field"><label>Mode</label>
+        <select id="modeSelect">
+          <option ${draft.mode==='Cash'?'selected':''}>Cash</option>
+          <option ${draft.mode==='Cheque'?'selected':''}>Cheque</option>
+          <option ${draft.mode==='Bank Transfer'?'selected':''}>Bank Transfer</option>
+          <option ${draft.mode==='UPI'?'selected':''}>UPI</option>
+        </select></div>` : ''}
+    </div>
+
+    ${isItemsType ? `
+      <table class="items-table">
+        <thead><tr><th style="width:34%">Product</th><th style="width:14%">Qty</th><th style="width:14%">Unit</th><th style="width:16%">Rate (₹)</th><th style="width:16%">Amount</th><th></th></tr></thead>
+        <tbody id="itemsTbody">
+          ${draft.items.map((it,idx)=>`
+            <tr data-idx="${idx}">
+              <td>
+                <div class="product-combo" data-idx="${idx}">
+                  <input type="text" class="item-product" data-idx="${idx}" autocomplete="off" placeholder="e.g. Corrugated Box" value="${escapeAttr(it.product)}">
+                  <button type="button" class="product-drop-btn" data-drop-idx="${idx}" tabindex="-1" title="Show saved products">▾</button>
+                  <div class="product-dropdown" id="productDrop-${idx}"></div>
+                </div>
+              </td>
+              <td><input type="number" class="item-qty" data-idx="${idx}" min="0" step="any" value="${it.qty}"></td>
+              <td><select class="item-unit" data-idx="${idx}">
+                    ${['Nos','Kg','Box','Roll','Sheet','Mtr','Case'].map(u=>`<option ${it.unit===u?'selected':''}>${u}</option>`).join('')}
+                  </select></td>
+              <td><input type="number" class="item-rate" data-idx="${idx}" min="0" step="any" value="${it.rate}"></td>
+              <td class="amt-cell" id="amt-${idx}">₹${fmt((Number(it.qty)||0)*(Number(it.rate)||0))}</td>
+              <td class="rm-cell">${draft.items.length>1?`<button class="btn danger small" data-rm-item="${idx}">✕</button>`:''}</td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+      <div class="add-row-link" id="addItemRow">+ Add another product line</div>
+
+      <div class="form-row">
+        <div class="field"><label>Packaging Charges (₹)</label><input type="number" id="packagingInput" min="0" step="any" value="${draft.packaging}"></div>
+        <div class="field">
+          <label>Commission Charges (deducted)</label>
+          <div style="display:flex;gap:6px;">
+            <select id="commissionType" style="max-width:118px;flex:0 0 auto;">
+              <option value="amount" ${draft.commissionType==='amount'?'selected':''}>₹ Amount</option>
+              <option value="percent" ${draft.commissionType==='percent'?'selected':''}>% of taxable</option>
+            </select>
+            <input type="number" id="commissionInput" min="0" step="any" value="${draft.commission}" style="flex:1;" placeholder="${draft.commissionType==='percent'?'e.g. 2':'e.g. 500'}">
+          </div>
+        </div>
+      </div>
+
+      <div class="type-picker" style="margin-bottom:10px;">
+        <div class="type-opt ${draft.gstType==='intra'?'active sale':''}" data-set-gsttype="intra">Intra-state (CGST + SGST)</div>
+        <div class="type-opt ${draft.gstType==='inter'?'active purchase':''}" data-set-gsttype="inter">Inter-state (IGST)</div>
+      </div>
+
+      <div class="form-row" style="max-width:420px;">
+        ${draft.gstType==='intra' ? `
+          <div class="field"><label>CGST %</label><input type="number" id="cgstRate" step="any" value="${draft.cgstRate}"></div>
+          <div class="field"><label>SGST %</label><input type="number" id="sgstRate" step="any" value="${draft.sgstRate}"></div>
+        ` : `
+          <div class="field"><label>IGST %</label><input type="number" id="igstRate" step="any" value="${draft.igstRate}"></div>
+        `}
+      </div>
+
+      <div class="totals-box" id="totalsBox">
+        <div class="trow"><span>Items Subtotal</span><span id="tb-subtotal">₹${fmt(totals.subtotal)}</span></div>
+        <div class="trow"><span>Packaging</span><span id="tb-packaging">₹${fmt(totals.packaging)}</span></div>
+        <div class="trow"><span>Taxable Value</span><span id="tb-taxable">₹${fmt(totals.taxable)}</span></div>
+        ${draft.gstType==='intra' ? `
+          <div class="trow"><span>CGST</span><span id="tb-cgst">₹${fmt(totals.cgstAmt)}</span></div>
+          <div class="trow"><span>SGST</span><span id="tb-sgst">₹${fmt(totals.sgstAmt)}</span></div>
+        ` : `
+          <div class="trow"><span>IGST</span><span id="tb-igst">₹${fmt(totals.igstAmt)}</span></div>
+        `}
+        <div class="trow"><span id="tb-commission-label">Commission${draft.commissionType==='percent' && draft.commission ? ' ('+draft.commission+'% deducted)' : ' (deducted)'}</span><span id="tb-commission">− ₹${fmt(totals.commission)}</span></div>
+        <div class="trow"><span>Round Off</span><span id="tb-round">₹${fmt(totals.roundoff)}</span></div>
+        <div class="trow total"><span>Total</span><span id="tb-total">₹${fmt(totals.total)}</span></div>
+      </div>
+    ` : `
+      <div class="form-row">
+        <div class="field"><label>Amount (₹)</label><input type="number" id="amountInput" min="0" step="any" value="${draft.amount}"></div>
+      </div>
+    `}
+
+    <div class="form-row">
+      <div class="field" style="flex:2;">
+        <label>Note (optional)</label>
+        <input type="text" id="noteInput" placeholder="e.g. Cheque no. 000123" value="${escapeAttr(draft.note)}">
+      </div>
+    </div>
+
+    <button class="btn" id="saveEntryBtn">✓ Save Entry</button>
+  `;
+}
+
+function label(t){ return {sale:'Sale',purchase:'Purchase',receipt:'Receipt (Money In)',payment:'Payment (Money Out)'}[t]; }
+
+function buildLedgerRows(sel, includeDeleteBtn){
+  const party = state.parties.find(p=>p.id===sel);
+  let list = state.entries.filter(e=>e.partyId===sel).sort(sortEntries);
+  if(ledgerSel.from) list = list.filter(e=> e.date >= ledgerSel.from);
+  if(ledgerSel.to) list = list.filter(e=> e.date <= ledgerSel.to);
+
+  let opening = party.openingBalance || 0;
+  if(ledgerSel.from){
+    state.entries.filter(e=>e.partyId===sel && e.date < ledgerSel.from).sort(sortEntries)
+      .forEach(e=>{ opening += entryDebit(e) - entryCredit(e); });
+  }
+  let bal = opening;
+  let totalDebit = 0, totalCredit = 0;
+  let rows = `<tr class="entry-head"><td colspan="4"><strong>Old Balance</strong></td><td class="num debit-col"></td><td class="num credit-col"></td><td class="num bal-col">₹${fmt(opening)}</td></tr>`;
+
+  list.forEach(e=>{
+    const d = entryDebit(e), c = entryCredit(e);
+    bal += d - c; totalDebit += d; totalCredit += c;
+    const itemLines = (e.items||[]).map(it=>`<div class="item-line">${escapeHtml(it.product)} — ${it.qty} ${it.unit} × ₹${fmt(it.rate)} = ₹${fmt((Number(it.qty)||0)*(Number(it.rate)||0))}</div>`).join('');
+    const gstLines = e.items ? `
+      ${e.packaging?`<div class="item-line">Packaging Charges — ₹${fmt(e.packaging)}</div>`:''}
+      ${e.cgstAmt?`<div class="item-line">CGST (${e.cgstRate}%) — ₹${fmt(e.cgstAmt)}</div>`:''}
+      ${e.sgstAmt?`<div class="item-line">SGST (${e.sgstRate}%) — ₹${fmt(e.sgstAmt)}</div>`:''}
+      ${e.igstAmt?`<div class="item-line">IGST (${e.igstRate}%) — ₹${fmt(e.igstAmt)}</div>`:''}
+      ${e.commission?`<div class="item-line">Commission Charges${e.commissionType==='percent' ? ' ('+e.commissionValue+'% of taxable)' : ''} — − ₹${fmt(e.commission)}</div>`:''}
+      <div class="item-line">Round off — ₹${fmt(e.roundoff)}</div>` : '';
+    const particularsTitle = e.type==='sale' ? 'Sales' : e.type==='purchase' ? 'Purchase' : e.type==='receipt' ? `Receipt [${e.mode||'Cash'}]` : `Payment [${e.mode||'Cash'}]`;
+    const agentLine = e.agentId ? `<div class="item-line">Agent: ${escapeHtml(agentName(e.agentId))}</div>` : '';
+    rows += `<tr class="entry-head">
+      <td>${e.voucherNo}</td>
+      <td>${fmtDate(e.date)}</td>
+      <td colspan="2">
+        <div class="particulars-title">${particularsTitle}</div>
+        ${agentLine}${itemLines}${gstLines}
+        ${e.note?`<div class="item-line">Note: ${escapeHtml(e.note)}</div>`:''}
+      </td>
+      <td class="num debit-col">${d?('₹'+fmt(d)):''}</td>
+      <td class="num credit-col">${c?('₹'+fmt(c)):''}</td>
+      <td class="num bal-col">₹${fmt(bal)}</td>
+    </tr>`;
+    if(includeDeleteBtn){
+      rows += `<tr class="no-print"><td colspan="7" style="text-align:right;padding:2px 8px 8px;border-bottom:1px solid var(--rule-blue);">
+        <button class="del-x" data-del-entry="${e.id}">Delete entry</button>
+      </td></tr>`;
+    }
+  });
+
+  const grandDebit = totalDebit + (opening>0?opening:0);
+  const grandCredit = totalCredit + (opening<0?-opening:0);
+  rows += `<tr class="total-row"><td colspan="4">Grand Total</td><td class="num">₹${fmt(grandDebit)}</td><td class="num">₹${fmt(grandCredit)}</td><td class="num"></td></tr>`;
+  rows += `<tr class="total-row closing"><td colspan="6">Closing Balance</td><td class="num">₹${fmt(bal)} ${bal>=0?'Dr':'Cr'}</td></tr>`;
+
+  return { rows, party, bal };
+}
+
+function buildLedgerTableHtml(sel, includeDeleteBtn){
+  const { rows } = buildLedgerRows(sel, includeDeleteBtn);
+  return `
+    <div class="ledger-wrap">
+      <table class="ledger">
+        <thead><tr><th style="width:6%">ID</th><th style="width:9%">Date</th><th colspan="2">Particulars</th><th style="width:12%">Debit</th><th style="width:12%">Credit</th><th style="width:12%">Balance</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+}
+
+function buildDispatchTableHtml(sel){
+  const party = state.parties.find(p=>p.id===sel);
+  let list = state.entries.filter(e=>e.partyId===sel && e.type==='sale').sort(sortEntries);
+  if(ledgerSel.from) list = list.filter(e=> e.date >= ledgerSel.from);
+  if(ledgerSel.to) list = list.filter(e=> e.date <= ledgerSel.to);
+
+  let rows = '';
+  let serial = 1;
+  list.forEach(e=>{
+    const ag = e.agentId ? agentName(e.agentId) : '—';
+    (e.items||[]).forEach(it=>{
+      rows += `<tr>
+        <td>${serial++}</td>
+        <td>${fmtDate(e.date)}</td>
+        <td>${escapeHtml(party.name)}</td>
+        <td>${escapeHtml(ag || '—')}</td>
+        <td>${escapeHtml(it.product)}</td>
+        <td class="num">${fmt(it.qty).replace(/\.00$/,'')}</td>
+        <td>${escapeHtml(it.unit)}</td>
+      </tr>`;
+    });
+  });
+  if(!rows){
+    rows = `<tr><td colspan="7" style="text-align:center;color:var(--ink-soft);padding:16px;">No sales found for this party in the selected range.</td></tr>`;
+  }
+  return `
+    <div class="ledger-wrap">
+      <table class="ledger">
+        <thead><tr><th style="width:6%">#</th><th style="width:10%">Date</th><th style="width:20%">Party</th><th style="width:16%">Agent</th><th>Product</th><th style="width:10%">Qty / Cases</th><th style="width:10%">Unit</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+}
+
+function renderLedger(){
+  const parties = state.parties;
+  const sel = ledgerSel.partyId;
+  const view = ledgerSel.view || 'ledger';
+  let bodyHtml = '';
+
+  if(sel){
+    bodyHtml = view==='dispatch' ? buildDispatchTableHtml(sel) : buildLedgerTableHtml(sel, true);
+  } else {
+    bodyHtml = `<div class="empty-note">Select a party above to view their report.</div>`;
+  }
+
+  return `
+    <h2 class="section-title">Ledger Report</h2>
+    <div class="type-picker no-print" style="margin-bottom:14px;">
+      <div class="type-opt ${view==='ledger'?'active sale':''}" data-set-view="ledger">💰 Ledger (with amounts)</div>
+      <div class="type-opt ${view==='dispatch'?'active receipt':''}" data-set-view="dispatch">📦 Sales Summary — Agent/Product/Qty (no price)</div>
+    </div>
+    <div class="party-select-row no-print">
+      <div class="field" style="min-width:200px;">
+        <label>Party</label>
+        <select id="ledgerPartySelect">
+          <option value="">— Select party —</option>
+          ${parties.map(p=>`<option value="${p.id}" ${sel===p.id?'selected':''}>${escapeHtml(p.name)}</option>`).join('')}
+        </select>
+      </div>
+      <div class="field"><label>From</label><input type="date" id="ledgerFrom" value="${ledgerSel.from}"></div>
+      <div class="field"><label>To</label><input type="date" id="ledgerTo" value="${ledgerSel.to}"></div>
+      <div class="field" style="justify-content:flex-end;">
+        <button class="btn" id="previewPrintBtn" ${sel?'':'disabled'}>🖨 Preview &amp; Print</button>
+      </div>
+    </div>
+    ${sel ? `<div style="margin-bottom:12px;font-family:var(--font-display);font-size:16px;color:var(--cover);">${escapeHtml(parties.find(p=>p.id===sel).name)} — ${view==='dispatch' ? 'Sales Summary (No Price)' : 'Ledger Itemized Report'}</div>` : ''}
+    ${bodyHtml}
+  `;
+}
+
+function renderSettings(){
+  return `
+  <div class="overlay no-print" id="settingsOverlay"></div>
+  <div class="settings-panel no-print">
+    <button class="settings-close" id="settingsCloseBtn">✕</button>
+    <h3>Settings</h3>
+    <div class="field" style="margin-bottom:10px;"><label>Company Address</label><input type="text" id="setAddress" value="${escapeAttr(state.settings.address)}"></div>
+    <div class="field" style="margin-bottom:10px;"><label>GSTIN</label><input type="text" id="setGstin" value="${escapeAttr(state.settings.gstin)}"></div>
+    <div class="field" style="margin-bottom:10px;"><label>Default CGST %</label><input type="number" step="any" id="setCgst" value="${state.settings.cgstRate}"></div>
+    <div class="field" style="margin-bottom:10px;"><label>Default SGST %</label><input type="number" step="any" id="setSgst" value="${state.settings.sgstRate}"></div>
+    <div class="field" style="margin-bottom:16px;"><label>Default IGST %</label><input type="number" step="any" id="setIgst" value="${state.settings.igstRate||5}"></div>
+    <button class="btn" id="saveSettingsBtn" style="width:100%;margin-bottom:10px;">Save Settings</button>
+    <hr style="border:none;border-top:1px solid #d8d0b8;margin:16px 0;">
+    <button class="btn danger" id="resetDataBtn" style="width:100%;">Reset All Data</button>
+    <hr style="border:none;border-top:1px solid #d8d0b8;margin:16px 0;">
+    ${window.ledgerAPI && window.ledgerAPI.checkUpdates ? `
+      ${updateState.status==='downloaded'
+        ? `<button class="btn" id="installUpdateBtn" style="width:100%;margin-bottom:8px;">Restart & Update to v${escapeHtml(updateState.version||'')}</button>`
+        : `<button class="btn secondary" id="checkUpdatesBtn" style="width:100%;margin-bottom:6px;">Check for Updates</button>`}
+      <div id="updateStatusNote" style="font-size:11px;color:var(--ink-soft);text-align:center;margin-bottom:10px;">${escapeHtml(updateStatusText())}</div>
+    ` : ''}
+    <div style="font-family:var(--font-mono);font-size:11px;color:var(--ink-soft);text-align:center;">
+      Factory Ledger v${escapeHtml(APP_VERSION)}
+      &nbsp;·&nbsp;<span id="whatsNewLinkBtn" style="color:var(--cover);text-decoration:underline;cursor:pointer;">What's new</span>
+    </div>
+  </div>`;
+}
+
+// ================= HELPERS =================
+function escapeHtml(s){ return (s||'').toString().replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function escapeAttr(s){ return escapeHtml(s); }
+
+// ================= PRODUCT DROPDOWN =================
+function closeAllProductDrops(exceptIdx){
+  document.querySelectorAll('.product-dropdown.open').forEach(el=>{
+    if(exceptIdx != null && el.id === 'productDrop-'+exceptIdx) return;
+    el.classList.remove('open');
+  });
+}
+
+function openProductDrop(idx, showAll){
+  closeAllProductDrops(idx);
+  const drop = document.getElementById('productDrop-'+idx);
+  const inp = document.querySelector(`.item-product[data-idx="${idx}"]`);
+  if(!drop || !inp) return;
+  const all = allKnownProducts();
+  const q = showAll ? '' : inp.value.trim().toLowerCase();
+  const matches = q ? all.filter(p=>p.toLowerCase().includes(q)) : all;
+  if(matches.length===0){ drop.classList.remove('open'); drop.innerHTML=''; return; }
+  drop.innerHTML = matches.map((p,i)=>`<div class="product-opt${i===0&&q?' active':''}" data-idx="${idx}" data-pick-product="${escapeAttr(p)}">${escapeHtml(p)}</div>`).join('');
+  drop.classList.add('open');
+}
+
+function selectProductOption(idx, val){
+  if(draft.items[idx]) draft.items[idx].product = val;
+  const inp = document.querySelector(`.item-product[data-idx="${idx}"]`);
+  if(inp){ inp.value = val; }
+  closeAllProductDrops();
+}
+
+// ================= EVENT DELEGATION (bound once — survives all re-renders) =================
+function initEventDelegation(){
+  // Click targets: every button, tab, and data-action element in the app
+  const CLICK_SEL = [
+    '#printBtn','#settingsBtn','#settingsCloseBtn','#settingsOverlay',
+    '#saveSettingsBtn','#resetDataBtn','#checkUpdatesBtn','#installUpdateBtn',
+    '#addPartyBtn','#cancelEditPartyBtn','#addAgentBtn',
+    '#addItemRow','#saveEntryBtn',
+    '#previewPrintBtn','#doPrintBtn','#waShareBtn','#closePreviewBtn',
+    '#whatsNewBtn','#whatsNewLinkBtn','#whatsNewCloseBtn','#whatsNewCloseX','#whatsNewOverlay',
+    '[data-tab]','[data-set-type]','[data-set-gsttype]','[data-set-view]',
+    '[data-edit-party]','[data-del-party]','[data-open-ledger]','[data-del-agent]',
+    '[data-rm-item]','[data-del-entry]','[data-drop-idx]'
+  ].join(',');
+
+  document.addEventListener('click', function(e){
+    const el = e.target.closest(CLICK_SEL);
+    if(!el) return;
+    const id = el.id, ds = el.dataset;
+
+    // ---- Header ----
+    if(id==='printBtn'){ currentTab='ledger'; if(ledgerSel.partyId){ printPreviewOpen=true; } render(); return; }
+    if(id==='settingsBtn'){ settingsOpen=true; render(); return; }
+    if(id==='whatsNewBtn' || id==='whatsNewLinkBtn'){ whatsNewOpen=true; render(); return; }
+    if(id==='whatsNewCloseBtn' || id==='whatsNewCloseX' || id==='whatsNewOverlay'){
+      whatsNewOpen=false; state.lastSeenVersion=APP_VERSION; saveData(); render(); return;
+    }
+
+    // ---- Settings panel ----
+    if(id==='settingsCloseBtn'||id==='settingsOverlay'){ settingsOpen=false; render(); return; }
+    if(id==='saveSettingsBtn'){
+      const gv = function(eid){ const e=document.getElementById(eid); return e ? e.value : ''; };
+      state.settings.address  = gv('setAddress');
+      state.settings.gstin    = gv('setGstin');
+      state.settings.cgstRate = Number(gv('setCgst'))||0;
+      state.settings.sgstRate = Number(gv('setSgst'))||0;
+      state.settings.igstRate = Number(gv('setIgst'))||0;
+      draft.cgstRate=state.settings.cgstRate; draft.sgstRate=state.settings.sgstRate; draft.igstRate=state.settings.igstRate;
+      saveData(); settingsOpen=false; render(); return;
+    }
+    if(id==='resetDataBtn'){
+      if(confirm('This will permanently delete all parties and entries. Continue?')){
+        state={ settings:{ companyName:state.settings.companyName, address:'', gstin:'', cgstRate:2.5, sgstRate:2.5, igstRate:5, counters:{sale:1,purchase:1,receipt:1,payment:1} }, parties:[], agents:[], entries:[], lastSeenVersion: APP_VERSION };
+        saveData(); settingsOpen=false; render();
+      }
+      return;
+    }
+    if(id==='checkUpdatesBtn' && window.ledgerAPI && window.ledgerAPI.checkUpdates){
+      updateState = { status:'checking', version:'' };
+      render();
+      window.ledgerAPI.checkUpdates().then(res=>{
+        if(res && !res.ok){ updateState = { status: res.reason || 'offline', version:'' }; render(); }
+      });
+      return;
+    }
+    if(id==='installUpdateBtn' && window.ledgerAPI && window.ledgerAPI.installUpdate){
+      window.ledgerAPI.installUpdate();
+      return;
+    }
+
+    // ---- Tabs ----
+    if(ds.tab){ currentTab=ds.tab; render(); return; }
+
+    // ---- Parties ----
+    if(id==='addPartyBtn'){
+      const name = draft.newPartyName.trim();
+      if(!name){ showToast('⚠️ Please enter a party name.'); return; }
+      const obAmt = Math.abs(Number(draft.newOpeningBalance)||0);
+      const openingBalance = draft.newOpeningSide==='cr' ? -obAmt : obAmt;
+      if(editingPartyId){
+        const p=state.parties.find(p=>p.id===editingPartyId);
+        p.name=name; p.type=draft.newPartyType; p.openingBalance=openingBalance;
+        editingPartyId=null;
+      } else {
+        state.parties.push({ id:uid(), name, type:draft.newPartyType, openingBalance });
+      }
+      draft.newPartyName=''; draft.newOpeningBalance=''; draft.newOpeningSide='dr';
+      saveData(); render(); return;
+    }
+    if(id==='cancelEditPartyBtn'){
+      editingPartyId=null; draft.newPartyName=''; draft.newOpeningBalance=''; draft.newOpeningSide='dr'; render(); return;
+    }
+    if(ds.editParty){
+      const p=state.parties.find(p=>p.id===ds.editParty); if(!p) return;
+      editingPartyId=p.id; draft.newPartyName=p.name; draft.newPartyType=p.type;
+      draft.newOpeningBalance=Math.abs(p.openingBalance||0)||'';
+      draft.newOpeningSide=(p.openingBalance||0)<0?'cr':'dr';
+      render(); return;
+    }
+    if(ds.delParty){
+      if(confirm('Delete this party and all their entries?')){
+        state.parties=state.parties.filter(p=>p.id!==ds.delParty);
+        state.entries=state.entries.filter(en=>en.partyId!==ds.delParty);
+        saveData(); render();
+      }
+      return;
+    }
+    if(ds.openLedger){
+      ledgerSel.partyId=ds.openLedger; ledgerSel.from=''; ledgerSel.to='';
+      currentTab='ledger'; render(); return;
+    }
+
+    // ---- Agents ----
+    if(id==='addAgentBtn'){
+      const name = draft.newAgentName.trim();
+      if(!name){ showToast('⚠️ Please enter an agent name.'); return; }
+      state.agents.push({ id: uid(), name });
+      draft.newAgentName='';
+      saveData(); render(); return;
+    }
+    if(ds.delAgent){
+      if(confirm('Delete this agent? Past entries keep the agent name, only the selectable list changes.')){
+        state.agents = state.agents.filter(a=>a.id!==ds.delAgent);
+        saveData(); render();
+      }
+      return;
+    }
+
+    // ---- New Entry ----
+    if(ds.setType){ draft.type=ds.setType; draft.partyId=''; render(); return; }
+    if(id==='addItemRow'){ draft.items.push(blankItem()); render(); return; }
+    if(ds.rmItem){ draft.items.splice(Number(ds.rmItem),1); render(); return; }
+    if(ds.dropIdx != null){
+      const idx = Number(ds.dropIdx);
+      const drop = document.getElementById('productDrop-'+idx);
+      const isOpen = drop && drop.classList.contains('open');
+      if(isOpen){ closeAllProductDrops(); }
+      else {
+        const inp = document.querySelector(`.item-product[data-idx="${idx}"]`);
+        if(inp) inp.focus();
+        openProductDrop(idx, true);
+      }
+      return;
+    }
+    if(ds.setGsttype){ draft.gstType=ds.setGsttype; render(); return; }
+    if(id==='saveEntryBtn'){ saveEntry(); return; }
+
+    // ---- Ledger ----
+    if(id==='previewPrintBtn'){ if(!ledgerSel.partyId) return; printPreviewOpen=true; render(); return; }
+    if(ds.setView){ ledgerSel.view=ds.setView; render(); return; }
+
+    // ---- Print preview ----
+    if(id==='doPrintBtn'){ window.print(); return; }
+    if(id==='waShareBtn'){ shareToWhatsApp(); return; }
+    if(id==='closePreviewBtn'){ printPreviewOpen=false; render(); return; }
+
+    // ---- Entry delete ----
+    if(ds.delEntry){
+      if(confirm('Delete this entry? This cannot be undone.')){
+        state.entries=state.entries.filter(en=>en.id!==ds.delEntry);
+        saveData(); render();
+      }
+    }
+  });
+
+  // Input events — update draft state live; no re-render needed (only totals update)
+  document.addEventListener('input', function(e){
+    const t=e.target, id=t.id, ds=t.dataset;
+    if(id==='newPartyName')     { draft.newPartyName=t.value; return; }
+    if(id==='newAgentName')     { draft.newAgentName=t.value; return; }
+    if(id==='newOpeningBalance'){ draft.newOpeningBalance=t.value; return; }
+    if(id==='amountInput')      { draft.amount=t.value; return; }
+    if(id==='noteInput')        { draft.note=t.value; return; }
+    if(id==='packagingInput')   { draft.packaging=t.value; updateTotalsBox(); return; }
+    if(id==='commissionInput')  { draft.commission=t.value; updateTotalsBox(); return; }
+    if(id==='cgstRate')         { draft.cgstRate=t.value; updateTotalsBox(); return; }
+    if(id==='sgstRate')         { draft.sgstRate=t.value; updateTotalsBox(); return; }
+    if(id==='igstRate')         { draft.igstRate=t.value; updateTotalsBox(); return; }
+    const idx = ds.idx != null ? Number(ds.idx) : -1;
+    if(idx >= 0 && t.classList.contains('item-product')){ if(draft.items[idx]) draft.items[idx].product=t.value; openProductDrop(idx, false); return; }
+    if(idx >= 0 && t.classList.contains('item-qty'))    { if(draft.items[idx]) draft.items[idx].qty=t.value; updateLineAndTotals(ds.idx); return; }
+    if(idx >= 0 && t.classList.contains('item-rate'))   { if(draft.items[idx]) draft.items[idx].rate=t.value; updateLineAndTotals(ds.idx); return; }
+  });
+
+  // Change events — for selects, checkboxes, and date pickers
+  document.addEventListener('change', function(e){
+    const t=e.target, id=t.id, ds=t.dataset;
+    if(id==='companyNameInput') { state.settings.companyName=t.value; saveData(); return; }
+    if(id==='newPartyType')     { draft.newPartyType=t.value; return; }
+    if(id==='newOpeningSide')   { draft.newOpeningSide=t.value; return; }
+    if(id==='partySelect')      { draft.partyId=t.value; return; }
+    if(id==='agentSelect')      { draft.agentId=t.value; return; }
+    if(id==='entryDate')        { draft.date=t.value; return; }
+    if(id==='modeSelect')       { draft.mode=t.value; return; }
+    if(id==='ledgerPartySelect'){ ledgerSel.partyId=t.value; render(); return; }
+    if(id==='ledgerFrom')       { ledgerSel.from=t.value; render(); return; }
+    if(id==='ledgerTo')         { ledgerSel.to=t.value; render(); return; }
+    if(id==='commissionType'){ draft.commissionType=t.value; updateTotalsBox(); return; }
+    if(id==='bwToggle'){
+      printBw=t.checked;
+      const paper=document.getElementById('printPaper');
+      if(paper) paper.classList.toggle('bw-mode',printBw);
+      return;
+    }
+    const idx = ds.idx != null ? Number(ds.idx) : -1;
+    if(idx >= 0 && t.classList.contains('item-unit')){ if(draft.items[idx]) draft.items[idx].unit=t.value; }
+  });
+
+  // Product dropdown: open on focus, pick on mousedown, navigate with keyboard, close on outside click
+  document.addEventListener('focusin', function(e){
+    const t = e.target;
+    if(t.classList && t.classList.contains('item-product')){
+      const idx = Number(t.dataset.idx);
+      if(!Number.isNaN(idx)) openProductDrop(idx, false);
+    } else if(!t.closest || !t.closest('.product-combo')){
+      closeAllProductDrops();
+    }
+  });
+
+  document.addEventListener('mousedown', function(e){
+    const opt = e.target.closest('.product-opt');
+    if(opt){
+      e.preventDefault();
+      selectProductOption(Number(opt.dataset.idx), opt.dataset.pickProduct);
+      return;
+    }
+    if(!e.target.closest('.product-combo')){
+      closeAllProductDrops();
+    }
+  });
+
+  document.addEventListener('keydown', function(e){
+    const t = e.target;
+    if(!t.classList || !t.classList.contains('item-product')) return;
+    const idx = Number(t.dataset.idx);
+    const drop = document.getElementById('productDrop-'+idx);
+    if(!drop || !drop.classList.contains('open')) return;
+    const opts = Array.from(drop.querySelectorAll('.product-opt'));
+    if(opts.length===0) return;
+    let cur = opts.findIndex(o=>o.classList.contains('active'));
+    if(e.key==='ArrowDown'){
+      e.preventDefault();
+      if(cur>=0) opts[cur].classList.remove('active');
+      cur = (cur + 1) % opts.length;
+      opts[cur].classList.add('active');
+      opts[cur].scrollIntoView({block:'nearest'});
+    } else if(e.key==='ArrowUp'){
+      e.preventDefault();
+      if(cur>=0) opts[cur].classList.remove('active');
+      cur = cur <= 0 ? opts.length - 1 : cur - 1;
+      opts[cur].classList.add('active');
+      opts[cur].scrollIntoView({block:'nearest'});
+    } else if(e.key==='Enter' && cur>=0){
+      e.preventDefault();
+      selectProductOption(idx, opts[cur].dataset.pickProduct);
+    } else if(e.key==='Escape'){
+      closeAllProductDrops();
+    }
+  });
+}
+
+// ================= WHATSAPP SHARE =================
+function showToast(msg, durationMs){
+  const t = document.getElementById('shareToast');
+  if(!t) return;
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(()=> t.classList.remove('show'), durationMs || 3200);
+}
+
+async function shareToWhatsApp(){
+  const btn = document.getElementById('waShareBtn');
+  const paper = document.getElementById('printPaper');
+  if(!paper){ showToast('⚠️ Nothing to share — open a ledger preview first.'); return; }
+
+  if(typeof html2canvas === 'undefined' || typeof jspdf === 'undefined'){
+    showToast('⏳ PDF libraries still loading — please try again in a moment.');
+    return;
+  }
+
+  if(btn){ btn.disabled = true; btn.textContent = '⏳ Generating PDF…'; }
+  showToast('⏳ Building PDF, please wait…', 30000);
+
+  try{
+    // 1. Render paper to canvas
+    const canvas = await html2canvas(paper, {
+      scale: 2, useCORS: true,
+      backgroundColor: paper.classList.contains('bw-mode') ? '#ffffff' : '#fffdf6',
+      logging: false
+    });
+
+    // 2. Build PDF
+    const { jsPDF } = jspdf;
+    const imgData = canvas.toDataURL('image/jpeg', 0.92);
+    const pxW = canvas.width, pxH = canvas.height;
+    const mmW = 210, mmH = (pxH / pxW) * mmW;
+    const pdf = new jsPDF({ orientation: mmH > mmW ? 'portrait' : 'landscape', unit: 'mm', format: [mmW, mmH] });
+    pdf.addImage(imgData, 'JPEG', 0, 0, mmW, mmH);
+    const pdfBlob = pdf.output('blob');
+
+    const sel = ledgerSel.partyId;
+    const party = sel ? state.parties.find(p=>p.id===sel) : null;
+    const partySlug = party ? party.name.replace(/[^a-zA-Z0-9]+/g,'_').slice(0,30) : 'Ledger';
+    const dateSlug = new Date().toISOString().slice(0,10);
+    const fileName = `Ledger_${partySlug}_${dateSlug}.pdf`;
+    const pdfFile = new File([pdfBlob], fileName, { type:'application/pdf' });
+
+    // 3a. Web Share API — ONLY on mobile browsers (not Electron/desktop)
+    //     The Windows OS share dialog doesn't surface WhatsApp, so we skip it there.
+    const isElectron = !!(window.ledgerAPI); // Electron exposes ledgerAPI via preload
+    const isMobile   = /Android|iPhone|iPad/i.test(navigator.userAgent);
+    const canWebShare = !isElectron && isMobile && navigator.canShare && navigator.canShare({ files:[pdfFile] });
+
+    if(canWebShare){
+      try{
+        await navigator.share({
+          files: [pdfFile],
+          title: fileName.replace(/_/g,' ').replace('.pdf',''),
+          text:  'Ledger report from Factory Ledger'
+        });
+        showToast('✅ Share sheet opened — pick WhatsApp to send!');
+        return;
+      } catch(shareErr){
+        if(shareErr.name === 'AbortError'){ showToast('Share cancelled.'); return; }
+        // otherwise fall through to download fallback
+      }
+    }
+
+    // 3b. Universal fallback: show modal with a Download button (no auto-download)
+    showWaModal(fileName, pdfBlob);
+    showToast(''); // hide the building-PDF toast immediately
+
+  } catch(err){
+    console.error('WhatsApp share error:', err);
+    showToast('❌ Could not generate PDF: ' + (err.message || err));
+  } finally{
+    if(btn){ btn.disabled = false; btn.textContent = '📤 Share to WhatsApp'; }
+  }
+}
+
+function showWaModal(fileName, pdfBlob){
+  const modal      = document.getElementById('waModal');
+  const nameEl     = document.getElementById('waModalFilename');
+  const descEl     = document.getElementById('waModalDesc');
+  const noteEl     = document.getElementById('waModalNote');
+  const desktopBtn = document.getElementById('waOpenDesktop');
+  const webBtn     = document.getElementById('waOpenWA');
+  const dlBtn      = document.getElementById('waDownloadPdf');
+  const closeBtn   = document.getElementById('waModalClose');
+  if(!modal) return;
+
+  if(nameEl) nameEl.textContent = '📄 ' + fileName;
+  modal.classList.add('open');
+
+  const isElectron = !!(window.ledgerAPI && window.ledgerAPI.openExternal);
+
+  // Clone buttons to remove any previous listeners
+  function freshBtn(el){
+    const clone = el.cloneNode(true);
+    el.parentNode.replaceChild(clone, el);
+    return clone;
+  }
+  const dBtn = freshBtn(desktopBtn);
+  const wBtn = freshBtn(webBtn);
+  const dlB = freshBtn(dlBtn);
+  const cBtn = freshBtn(closeBtn);
+
+  cBtn.addEventListener('click', ()=> modal.classList.remove('open'));
+  modal.onclick = e => { if(e.target === modal) modal.classList.remove('open'); };
+  wBtn.addEventListener('click', ()=> window.open('https://web.whatsapp.com','_blank','noopener'));
+
+  // Download PDF button — only triggers download on explicit click
+  if(pdfBlob){
+    dlB.style.display = '';
+    dlB.addEventListener('click', ()=>{
+      const objUrl = URL.createObjectURL(pdfBlob);
+      const a = document.createElement('a');
+      a.href = objUrl; a.download = fileName;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(()=> URL.revokeObjectURL(objUrl), 60000);
+      dlB.textContent = '✅ Downloaded!';
+      setTimeout(()=>{ dlB.textContent = '⬇️ Download PDF'; }, 2500);
+    });
+  } else {
+    dlB.style.display = 'none';
+  }
+
+  if(isElectron){
+    // Show the Desktop button; try whatsapp:// URI scheme on click
+    dBtn.style.display = '';
+    wBtn.style.display = 'none';   // hide Web until desktop fails
+    if(descEl) descEl.innerHTML = 'PDF saved to <strong>Downloads</strong>. Click below to open WhatsApp Desktop and attach the file.';
+    if(noteEl) noteEl.style.display = 'none';
+
+    dBtn.addEventListener('click', async ()=>{
+      dBtn.disabled = true;
+      dBtn.textContent = '⏳ Opening…';
+      const ok = await window.ledgerAPI.openExternal('whatsapp://');
+      dBtn.disabled = false;
+      dBtn.textContent = 'Open WhatsApp →';
+      if(!ok){
+        // WhatsApp Desktop not installed — surface the web fallback
+        dBtn.style.display = 'none';
+        wBtn.style.display = '';
+        if(noteEl){
+          noteEl.textContent = 'WhatsApp Desktop not found. Use WhatsApp Web instead.';
+          noteEl.style.display = 'block';
+        }
+      }
+    });
+  } else {
+    // Browser / non-Electron: show BOTH Desktop and Web buttons
+    // The whatsapp:// URI scheme works in browsers too if WhatsApp Desktop is installed
+    dBtn.style.display = '';
+    wBtn.style.display = '';
+    if(descEl) descEl.innerHTML = 'PDF saved to <strong>Downloads</strong>. Open WhatsApp and attach the file to any chat.';
+
+    dBtn.addEventListener('click', ()=>{
+      // Open WhatsApp Desktop via URI scheme (works if installed)
+      window.location.href = 'whatsapp://';
+    });
+  }
+}
+
+function updateLineAndTotals(idxStr){
+  const idx = Number(idxStr);
+  const it = draft.items[idx];
+  const amtCell = document.getElementById('amt-'+idx);
+  if(amtCell) amtCell.textContent = '₹'+fmt((Number(it.qty)||0)*(Number(it.rate)||0));
+  updateTotalsBox();
+}
+function updateTotalsBox(){
+  const t = entryTotals(draft.items, draft.cgstRate, draft.sgstRate, draft.gstType, draft.igstRate, draft.packaging, draft.commission, draft.commissionType);
+  const set = (id,val)=>{ const el=document.getElementById(id); if(el) el.textContent = '₹'+fmt(val); };
+  set('tb-subtotal', t.subtotal); set('tb-packaging', t.packaging); set('tb-taxable', t.taxable);
+  set('tb-cgst', t.cgstAmt); set('tb-sgst', t.sgstAmt); set('tb-igst', t.igstAmt);
+  const commEl = document.getElementById('tb-commission'); if(commEl) commEl.textContent = '− ₹'+fmt(t.commission);
+  const commLabelEl = document.getElementById('tb-commission-label');
+  if(commLabelEl) commLabelEl.textContent = (draft.commissionType==='percent' && draft.commission) ? `Commission (${draft.commission}% deducted)` : 'Commission (deducted)';
+  set('tb-round', t.roundoff); set('tb-total', t.total);
+}
+
+function saveEntry(){
+  if(!draft.partyId){ showToast('⚠️ Please select a party.'); return; }
+  if(!draft.date){ showToast('⚠️ Please pick a date.'); return; }
+
+  const isItemsType = draft.type==='sale' || draft.type==='purchase';
+  let entry = { id: uid(), type: draft.type, partyId: draft.partyId, agentId: draft.agentId||'', date: draft.date, note: draft.note };
+
+  if(isItemsType){
+    const items = draft.items
+      .map(it=>({ product: it.product.trim(), qty: Number(it.qty)||0, unit: it.unit, rate: Number(it.rate)||0 }))
+      .filter(it=> it.product && it.qty>0 && it.rate>=0);
+    if(items.length===0){ showToast('⚠️ Add at least one product line with quantity and rate.'); return; }
+    const t = entryTotals(items, Number(draft.cgstRate)||0, Number(draft.sgstRate)||0, draft.gstType, Number(draft.igstRate)||0, draft.packaging, draft.commission, draft.commissionType);
+    entry.items = items;
+    entry.gstType = draft.gstType;
+    entry.cgstRate = draft.gstType==='intra' ? (Number(draft.cgstRate)||0) : 0;
+    entry.sgstRate = draft.gstType==='intra' ? (Number(draft.sgstRate)||0) : 0;
+    entry.igstRate = draft.gstType==='inter' ? (Number(draft.igstRate)||0) : 0;
+    entry.subtotal = t.subtotal; entry.packaging = t.packaging; entry.taxable = t.taxable;
+    entry.cgstAmt = t.cgstAmt; entry.sgstAmt = t.sgstAmt; entry.igstAmt = t.igstAmt;
+    entry.commission = t.commission;
+    entry.commissionType = t.commissionType;
+    entry.commissionValue = t.commissionValue;
+    entry.roundoff = t.roundoff; entry.total = t.total;
+    entry.voucherNo = state.settings.counters[draft.type]++;
+  } else {
+    const amt = Number(draft.amount)||0;
+    if(amt<=0){ showToast('⚠️ Please enter a valid amount.'); return; }
+    entry.total = Math.round(amt*100)/100;
+    entry.mode = draft.mode;
+    entry.voucherNo = state.settings.counters[draft.type]++;
+  }
+
+  state.entries.push(entry);
+  saveData();
+
+  // reset draft but keep type/party for fast repeated entry
+  draft.items = [blankItem()];
+  draft.amount = ''; draft.note = ''; draft.packaging=''; draft.commission=''; draft.commissionType='amount';
+  showToast('✅ Entry saved — ready for the next one.');
+  render();
+  // put the cursor straight back into the first field so typing can continue immediately
+  setTimeout(()=>{
+    const next = isItemsType
+      ? document.querySelector('.item-product[data-idx="0"]')
+      : document.getElementById('amountInput');
+    if(next) next.focus();
+  }, 0);
+}
+
+// init
+draft.cgstRate = state.settings.cgstRate;
+draft.sgstRate = state.settings.sgstRate;
+initEventDelegation(); // bound once — never needs to run again after re-renders
+if(window.ledgerAPI && window.ledgerAPI.onUpdateStatus){
+  window.ledgerAPI.onUpdateStatus((data)=>{
+    updateState = data || { status:'', version:'' };
+    if(updateState.status==='downloaded'){
+      showToast(`✅ Update v${updateState.version||''} ready — open Settings to restart & update.`, 5000);
+    }
+    if(settingsOpen) render();
+  });
+}
+loadData();
+</script>
+</body>
+</html>
