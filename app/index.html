@@ -268,8 +268,12 @@ const STORAGE_KEY = 'factory-ledger-data';
 // Bump this with each release you hand out, and add an entry to CHANGELOG.
 // There's no internet auto-update (this app is fully offline) — this just
 // shows a "what's new" note the first time someone opens a newer copy.
-const APP_VERSION = '1.3.0';
+const APP_VERSION = '1.3.1';
 const CHANGELOG = [
+  { version:'1.3.1', notes:[
+    'Ledger Report now includes "All Parties (All Transactions)" so you can view, print, and share all transactions for any date range',
+    'Added automatic in-app updates via GitHub Releases while keeping all saved data safe'
+  ]},
   { version:'1.3.0', notes:[
     'Product field now suggests names you have used before, as you type',
     'Added Agents — assign a sales/purchase agent to any entry, manage them from the Parties tab',
@@ -426,7 +430,8 @@ function renderWhatsNew(){
 
 function renderPrintPreview(){
   const sel = ledgerSel.partyId;
-  const party = state.parties.find(p=>p.id===sel);
+  const isAll = sel === '__ALL__';
+  const party = isAll ? { name: 'All Parties (All Transactions)' } : state.parties.find(p=>p.id===sel);
   if(!party){ return ''; }
   const view = ledgerSel.view || 'ledger';
   const tableHtml = view==='dispatch' ? buildDispatchTableHtml(sel) : buildLedgerTableHtml(sel, false);
@@ -713,14 +718,18 @@ function renderNewEntry(){
 function label(t){ return {sale:'Sale',purchase:'Purchase',receipt:'Receipt (Money In)',payment:'Payment (Money Out)'}[t]; }
 
 function buildLedgerRows(sel, includeDeleteBtn){
-  const party = state.parties.find(p=>p.id===sel);
-  let list = state.entries.filter(e=>e.partyId===sel).sort(sortEntries);
+  const isAll = sel === '__ALL__';
+  const party = isAll ? { name: 'All Parties (All Transactions)' } : state.parties.find(p=>p.id===sel);
+  const partyNameById = id => ((state.parties.find(p=>p.id===id)||{}).name || 'Unknown Party');
+  let list = (isAll ? state.entries.slice() : state.entries.filter(e=>e.partyId===sel)).sort(sortEntries);
   if(ledgerSel.from) list = list.filter(e=> e.date >= ledgerSel.from);
   if(ledgerSel.to) list = list.filter(e=> e.date <= ledgerSel.to);
 
-  let opening = party.openingBalance || 0;
+  let opening = isAll
+    ? state.parties.reduce((s,p)=> s + (p.openingBalance||0), 0)
+    : (party.openingBalance || 0);
   if(ledgerSel.from){
-    state.entries.filter(e=>e.partyId===sel && e.date < ledgerSel.from).sort(sortEntries)
+    state.entries.filter(e=>(isAll || e.partyId===sel) && e.date < ledgerSel.from).sort(sortEntries)
       .forEach(e=>{ opening += entryDebit(e) - entryCredit(e); });
   }
   let bal = opening;
@@ -739,12 +748,13 @@ function buildLedgerRows(sel, includeDeleteBtn){
       ${e.commission?`<div class="item-line">Commission Charges${e.commissionType==='percent' ? ' ('+e.commissionValue+'% of taxable)' : ''} — − ₹${fmt(e.commission)}</div>`:''}
       <div class="item-line">Round off — ₹${fmt(e.roundoff)}</div>` : '';
     const particularsTitle = e.type==='sale' ? 'Sales' : e.type==='purchase' ? 'Purchase' : e.type==='receipt' ? `Receipt [${e.mode||'Cash'}]` : `Payment [${e.mode||'Cash'}]`;
+    const partyTag = isAll ? ` — ${escapeHtml(partyNameById(e.partyId))}` : '';
     const agentLine = e.agentId ? `<div class="item-line">Agent: ${escapeHtml(agentName(e.agentId))}</div>` : '';
     rows += `<tr class="entry-head">
       <td>${e.voucherNo}</td>
       <td>${fmtDate(e.date)}</td>
       <td colspan="2">
-        <div class="particulars-title">${particularsTitle}</div>
+        <div class="particulars-title">${particularsTitle}${partyTag}</div>
         ${agentLine}${itemLines}${gstLines}
         ${e.note?`<div class="item-line">Note: ${escapeHtml(e.note)}</div>`:''}
       </td>
@@ -779,8 +789,9 @@ function buildLedgerTableHtml(sel, includeDeleteBtn){
 }
 
 function buildDispatchTableHtml(sel){
-  const party = state.parties.find(p=>p.id===sel);
-  let list = state.entries.filter(e=>e.partyId===sel && e.type==='sale').sort(sortEntries);
+  const isAll = sel === '__ALL__';
+  const partyNameById = id => ((state.parties.find(p=>p.id===id)||{}).name || 'Unknown Party');
+  let list = state.entries.filter(e=>(isAll || e.partyId===sel) && e.type==='sale').sort(sortEntries);
   if(ledgerSel.from) list = list.filter(e=> e.date >= ledgerSel.from);
   if(ledgerSel.to) list = list.filter(e=> e.date <= ledgerSel.to);
 
@@ -788,11 +799,12 @@ function buildDispatchTableHtml(sel){
   let serial = 1;
   list.forEach(e=>{
     const ag = e.agentId ? agentName(e.agentId) : '—';
+    const pName = partyNameById(e.partyId);
     (e.items||[]).forEach(it=>{
       rows += `<tr>
         <td>${serial++}</td>
         <td>${fmtDate(e.date)}</td>
-        <td>${escapeHtml(party.name)}</td>
+        <td>${escapeHtml(pName)}</td>
         <td>${escapeHtml(ag || '—')}</td>
         <td>${escapeHtml(it.product)}</td>
         <td class="num">${fmt(it.qty).replace(/\.00$/,'')}</td>
@@ -835,6 +847,7 @@ function renderLedger(){
         <label>Party</label>
         <select id="ledgerPartySelect">
           <option value="">— Select party —</option>
+          <option value="__ALL__" ${sel==='__ALL__'?'selected':''}>All Parties (All Transactions)</option>
           ${parties.map(p=>`<option value="${p.id}" ${sel===p.id?'selected':''}>${escapeHtml(p.name)}</option>`).join('')}
         </select>
       </div>
@@ -844,7 +857,7 @@ function renderLedger(){
         <button class="btn" id="previewPrintBtn" ${sel?'':'disabled'}>🖨 Preview &amp; Print</button>
       </div>
     </div>
-    ${sel ? `<div style="margin-bottom:12px;font-family:var(--font-display);font-size:16px;color:var(--cover);">${escapeHtml(parties.find(p=>p.id===sel).name)} — ${view==='dispatch' ? 'Sales Summary (No Price)' : 'Ledger Itemized Report'}</div>` : ''}
+    ${sel ? `<div style="margin-bottom:12px;font-family:var(--font-display);font-size:16px;color:var(--cover);">${escapeHtml(sel==='__ALL__' ? 'All Parties (All Transactions)' : ((parties.find(p=>p.id===sel)||{}).name||''))} — ${view==='dispatch' ? 'Sales Summary (No Price)' : 'Ledger Itemized Report'}</div>` : ''}
     ${bodyHtml}
   `;
 }
@@ -1201,8 +1214,8 @@ async function shareToWhatsApp(){
     const pdfBlob = pdf.output('blob');
 
     const sel = ledgerSel.partyId;
-    const party = sel ? state.parties.find(p=>p.id===sel) : null;
-    const partySlug = party ? party.name.replace(/[^a-zA-Z0-9]+/g,'_').slice(0,30) : 'Ledger';
+    const party = (sel && sel !== '__ALL__') ? state.parties.find(p=>p.id===sel) : null;
+    const partySlug = sel === '__ALL__' ? 'All_Parties' : (party ? party.name.replace(/[^a-zA-Z0-9]+/g,'_').slice(0,30) : 'Ledger');
     const dateSlug = new Date().toISOString().slice(0,10);
     const fileName = `Ledger_${partySlug}_${dateSlug}.pdf`;
     const pdfFile = new File([pdfBlob], fileName, { type:'application/pdf' });
