@@ -268,8 +268,11 @@ const STORAGE_KEY = 'factory-ledger-data';
 // Bump this with each release you hand out, and add an entry to CHANGELOG.
 // There's no internet auto-update (this app is fully offline) — this just
 // shows a "what's new" note the first time someone opens a newer copy.
-const APP_VERSION = '1.3.1';
+const APP_VERSION = '1.3.2';
 const CHANGELOG = [
+  { version:'1.3.2', notes:[
+    'Dashboard now shows Daily (every day) and Monthly Income & Expenses with options to choose date/month and Sales/Purchases or Receipts/Payments'
+  ]},
   { version:'1.3.1', notes:[
     'Ledger Report now includes "All Parties (All Transactions)" so you can view, print, and share all transactions for any date range',
     'Added automatic in-app updates via GitHub Releases while keeping all saved data safe'
@@ -320,6 +323,7 @@ function updateStatusText(){
 // ---- new entry draft state ----
 let draft = { type:'sale', partyId:'', agentId:'', date: todayStr(), items:[ blankItem() ], gstType:'intra', cgstRate:2.5, sgstRate:2.5, igstRate:5, packaging:'', commission:'', commissionType:'amount', amount:'', mode:'Cash', note:'', newPartyName:'', newPartyType:'customer', newOpeningBalance:'', newOpeningSide:'dr', newAgentName:'' };
 let ledgerSel = { partyId:'', from:'', to:'', view:'ledger' };
+let summarySel = { mode:'daily', basis:'billing', date: todayStr(), month: todayStr().slice(0,7) };
 let editingPartyId = null;
 
 function todayStr(){ const d=new Date(); return d.toISOString().slice(0,10); }
@@ -328,6 +332,12 @@ function agentName(id){ const a = state.agents.find(a=>a.id===id); return a ? a.
 function uid(){ return 'id'+Math.random().toString(36).slice(2,10)+Date.now().toString(36); }
 function fmt(n){ n = Number(n)||0; return n.toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2}); }
 function fmtDate(iso){ if(!iso) return ''; const [y,m,d]=iso.split('-'); return `${d}-${m}-${y}`; }
+function fmtMonth(ym){
+  if(!ym) return '';
+  const [y,m] = ym.split('-');
+  const names = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return `${names[(Number(m)||1)-1] || m} ${y}`;
+}
 
 // Works two ways, fully offline either way:
 // 1) Inside the Factory Ledger desktop app -> saves to a file on this PC via window.ledgerAPI
@@ -491,6 +501,94 @@ function renderTabContent(){
   return '';
 }
 
+function calcIncomeExpense(entries, basis){
+  let income = 0, expense = 0;
+  entries.forEach(e=>{
+    const amt = Number(e.total)||0;
+    if(basis === 'cash'){
+      if(e.type==='receipt') income += amt;
+      else if(e.type==='payment') expense += amt;
+    } else {
+      if(e.type==='sale') income += amt;
+      else if(e.type==='purchase') expense += amt;
+    }
+  });
+  return { income, expense, net: income - expense };
+}
+
+function renderIncomeExpenseSection(){
+  const mode = summarySel.mode || 'daily';
+  const basis = summarySel.basis || 'billing';
+  const selKey = mode==='daily' ? summarySel.date : summarySel.month;
+
+  const filteredForCards = selKey
+    ? state.entries.filter(e=> mode==='daily' ? e.date===selKey : (e.date||'').slice(0,7)===selKey)
+    : state.entries;
+  const cardTotals = calcIncomeExpense(filteredForCards, basis);
+  const periodLabel = selKey
+    ? (mode==='daily' ? fmtDate(selKey) : fmtMonth(selKey))
+    : (mode==='daily' ? 'All Days' : 'All Months');
+
+  // Group entries by day or month
+  const groups = new Map();
+  state.entries.forEach(e=>{
+    if(!e.date) return;
+    const key = mode==='daily' ? e.date : e.date.slice(0,7);
+    if(!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(e);
+  });
+  const sortedKeys = Array.from(groups.keys()).sort((a,b)=> b.localeCompare(a));
+  const rowsHtml = sortedKeys.map(k=>{
+    const t = calcIncomeExpense(groups.get(k), basis);
+    const isSel = selKey && k===selKey;
+    return `<tr${isSel?' style="background:var(--gold-soft);font-weight:700;"':''}>
+      <td>${escapeHtml(mode==='daily' ? fmtDate(k) : fmtMonth(k))}</td>
+      <td class="num credit-col">₹${fmt(t.income)}</td>
+      <td class="num debit-col">₹${fmt(t.expense)}</td>
+      <td class="num bal-col" style="color:${t.net>=0?'var(--credit)':'var(--debit)'};">₹${fmt(t.net)}</td>
+    </tr>`;
+  }).join('');
+
+  const incLabel = basis==='cash' ? 'Income (Receipts)' : 'Income (Sales)';
+  const expLabel = basis==='cash' ? 'Expenses (Payments)' : 'Expenses (Purchases)';
+
+  return `
+    <h2 class="section-title" style="margin-top:20px;">Income &amp; Expenses</h2>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px;">
+      <div class="type-picker" style="margin-bottom:0;">
+        <div class="type-opt ${mode==='daily'?'active sale':''}" data-set-summary-mode="daily">📅 Every Day</div>
+        <div class="type-opt ${mode==='monthly'?'active receipt':''}" data-set-summary-mode="monthly">🗓 Monthly</div>
+      </div>
+      <div class="type-picker" style="margin-bottom:0;">
+        <div class="type-opt ${basis==='billing'?'active sale':''}" data-set-summary-basis="billing">🧾 Sales &amp; Purchases</div>
+        <div class="type-opt ${basis==='cash'?'active receipt':''}" data-set-summary-basis="cash">💵 Receipts &amp; Payments</div>
+      </div>
+      <div class="field" style="flex:0 0 auto;min-width:160px;">
+        <label>${mode==='daily'?'Select Date':'Select Month'}</label>
+        ${mode==='daily'
+          ? `<input type="date" id="summaryDate" value="${summarySel.date}">`
+          : `<input type="month" id="summaryMonth" value="${summarySel.month}">`}
+      </div>
+      ${selKey ? `<button class="btn secondary small" id="summaryClearFilter">Show All</button>` : ''}
+    </div>
+
+    <div class="cards" style="margin-bottom:14px;">
+      <div class="card payable"><div class="lbl">${incLabel} · ${escapeHtml(periodLabel)}</div><div class="val" style="color:var(--credit);">₹${fmt(cardTotals.income)}</div></div>
+      <div class="card receivable"><div class="lbl">${expLabel} · ${escapeHtml(periodLabel)}</div><div class="val" style="color:var(--debit);">₹${fmt(cardTotals.expense)}</div></div>
+      <div class="card"><div class="lbl">Net · ${escapeHtml(periodLabel)}</div><div class="val" style="color:${cardTotals.net>=0?'var(--credit)':'var(--debit)'};">₹${fmt(cardTotals.net)}</div></div>
+    </div>
+
+    ${sortedKeys.length===0
+      ? `<div class="empty-note">No transactions recorded yet.</div>`
+      : `<div class="ledger-wrap" style="margin-bottom:20px;">
+          <table class="ledger">
+            <thead><tr><th>${mode==='daily'?'Date':'Month'}</th><th style="width:24%;text-align:right;">${incLabel}</th><th style="width:24%;text-align:right;">${expLabel}</th><th style="width:24%;text-align:right;">Net</th></tr></thead>
+            <tbody>${rowsHtml}</tbody>
+          </table>
+        </div>`}
+  `;
+}
+
 function renderDashboard(){
   const recv = totalReceivable(), pay = totalPayable();
   const recent = [...state.entries].sort((a,b)=> b.date<a.date?-1: b.date>a.date?1: b.voucherNo-a.voucherNo).slice(0,8);
@@ -502,6 +600,7 @@ function renderDashboard(){
       <div class="card"><div class="lbl">Parties</div><div class="val">${state.parties.length}</div></div>
       <div class="card"><div class="lbl">Entries Recorded</div><div class="val">${state.entries.length}</div></div>
     </div>
+    ${renderIncomeExpenseSection()}
     <h2 class="section-title">Recent Activity</h2>
     ${recent.length===0 ? `<div class="empty-note">No entries yet — add your first sale or purchase from the New Entry tab.</div>` :
       `<div class="recent-list">${recent.map(e=>{
@@ -933,6 +1032,7 @@ function initEventDelegation(){
     '#previewPrintBtn','#doPrintBtn','#waShareBtn','#closePreviewBtn',
     '#whatsNewBtn','#whatsNewLinkBtn','#whatsNewCloseBtn','#whatsNewCloseX','#whatsNewOverlay',
     '[data-tab]','[data-set-type]','[data-set-gsttype]','[data-set-view]',
+    '[data-set-summary-mode]','[data-set-summary-basis]','#summaryClearFilter',
     '[data-edit-party]','[data-del-party]','[data-open-ledger]','[data-del-agent]',
     '[data-rm-item]','[data-del-entry]','[data-drop-idx]'
   ].join(',');
@@ -1059,6 +1159,14 @@ function initEventDelegation(){
     if(ds.setGsttype){ draft.gstType=ds.setGsttype; render(); return; }
     if(id==='saveEntryBtn'){ saveEntry(); return; }
 
+    // ---- Dashboard Income & Expenses ----
+    if(ds.setSummaryMode){ summarySel.mode=ds.setSummaryMode; render(); return; }
+    if(ds.setSummaryBasis){ summarySel.basis=ds.setSummaryBasis; render(); return; }
+    if(id==='summaryClearFilter'){
+      if(summarySel.mode==='daily') summarySel.date=''; else summarySel.month='';
+      render(); return;
+    }
+
     // ---- Ledger ----
     if(id==='previewPrintBtn'){ if(!ledgerSel.partyId) return; printPreviewOpen=true; render(); return; }
     if(ds.setView){ ledgerSel.view=ds.setView; render(); return; }
@@ -1109,6 +1217,8 @@ function initEventDelegation(){
     if(id==='ledgerPartySelect'){ ledgerSel.partyId=t.value; render(); return; }
     if(id==='ledgerFrom')       { ledgerSel.from=t.value; render(); return; }
     if(id==='ledgerTo')         { ledgerSel.to=t.value; render(); return; }
+    if(id==='summaryDate')      { summarySel.date=t.value; render(); return; }
+    if(id==='summaryMonth')     { summarySel.month=t.value; render(); return; }
     if(id==='commissionType'){ draft.commissionType=t.value; updateTotalsBox(); return; }
     if(id==='bwToggle'){
       printBw=t.checked;
